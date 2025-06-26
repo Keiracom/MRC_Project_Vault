@@ -133,6 +133,10 @@ The `SAVE_ROUTER.md` automatically directs information to the right files:
 
 ---
 
+## 📚 Resources
+
+- **[[PROMPTS_NOTEBOOK]]** - Collection of effective prompts and AI interaction patterns
+
 ## 🎉 Benefits of This System
 
 ✅ **No Information Loss** - Everything preserved in git history  

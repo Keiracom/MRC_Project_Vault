@@ -15,6 +15,14 @@ Multi-platform competitive intelligence service with automated reporting, dashbo
 - **Tech Stack**: Complete - SEMrush API, Claude API, Supabase, n8n ✅
 - **Project Management**: Obsidian + GitHub + MCP integration ✅
 - **Revenue**: $0 (system ready for customers)
+- **Connection Status**: [[CONNECTION_STATUS]] - API and service connectivity tracking
+
+### 🚀 Quick Reference Guides
+- [[QUICK_REFERENCE/index|Quick Reference Index]] - All guides in one place
+- [[QUICK_REFERENCE/api_limits|API Limits]] - Rate limits, quotas, and costs
+- [[QUICK_REFERENCE/workflow_schedule|Workflow Schedule]] - When everything runs
+- [[QUICK_REFERENCE/conversion_metrics|Conversion Metrics]] - Targets and benchmarks
+- [[QUICK_REFERENCE/troubleshooting|Troubleshooting]] - Common issues and fixes
 
 ### Critical Implementation Notes
 - **LinkedIn Distribution**: 365 pre-generated reports/month

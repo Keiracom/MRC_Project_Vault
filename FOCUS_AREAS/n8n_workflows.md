@@ -88,15 +88,16 @@ n8n handles all automation, data processing, and workflow orchestration for the 
 
 ## Distribution Implementation Details
 
-### Volume Reality (Updated 2025-01-30 - FINAL)
+### Volume Reality (Updated 2025-01-30 - FINAL CORRECTED)
 - **LinkedIn**: 365 pre-generated reports/month (85/week × 4.3 weeks)
-- **Email**: 448 on-demand reports/month (17,910 emails × 1.8% click × 20% convert)
+- **Email**: 448 on-demand reports/month (17,910 emails × 2.5% CTR)
 - **Total Reports**: 813 reports/month
 - **Competitors per report**: 6 (optimized from 8)
 - **SEMrush API Units**: 528,450 units/month (650 units per report)
 - **API Cost**: ~$26.42/month additional (beyond included 10,000 units)
 - **Total SEMrush Cost**: $476.42/month ($450 plan + $26.42 overage)
 - **Cost per report**: $0.0325 (3.25 cents)
+- **Note**: No 7-day trial - direct to paid conversion
 
 ### Report Generation Strategy (FINAL)
 - **LinkedIn**: Pre-generate all 85 reports Sunday night 10 PM
@@ -116,6 +117,7 @@ n8n handles all automation, data processing, and workflow orchestration for the 
 - **Full 20-Workflow Architecture**: `C:\Users\dvids\MRC\MRC N8N Workflow Architecture.md`
 - **Business Operations Schema**: `C:\Users\dvids\MRC\MRC Business Operations Schema - Production Ready.md`
 - **Distribution Implementation Plan**: `C:\Users\dvids\MRC\MRC_Project_Vault\FOCUS_AREAS\distribution_implementation.md`
+- **Free Report Distribution Workflow**: [[free_report_distribution_workflow]]
 
 ## Technical Configuration
 
@@ -328,3 +330,333 @@ When working on n8n workflows:
 3. Build Email Click Handler for conversions
 4. Setup Sunday LinkedIn Pre-Generator
 5. All workflows must handle 6 competitors and output HTML
+
+## Payment Processing Workflow (Detailed)
+
+### Stripe Webhook → Customer Onboarding Flow
+**Trigger**: Stripe webhooks (checkout.session.completed, customer.subscription.created)
+**Process**:
+
+```
+[Stripe Webhook Event]
+    ↓
+[Validate Webhook Signature]
+    ↓
+[Extract Customer Data]
+├── email
+├── name
+├── subscription_tier
+├── payment_method_id
+└── amount_paid
+    ↓
+[Create/Update Customer in Supabase]
+    ↓
+[Immediate Report Generation] (NO DELAY)
+├── Get customer domain
+├── Find 6 competitors
+├── Generate full report (650 units)
+└── Store in database
+    ↓
+[Send Welcome Email]
+├── Report link
+├── Dashboard credentials
+└── Next steps guide
+    ↓
+[Create Dashboard Access]
+├── Generate secure password
+├── Create user account
+└── Set permissions by tier
+    ↓
+[Log Transaction]
+└── [Notify Slack/Team]
+```
+
+### Payment Error Handling
+- **Failed payments**: Retry 3x over 7 days
+- **Disputed charges**: Pause account, notify team
+- **Refunds**: Process automatically, revoke access
+- **Upgrades/Downgrades**: Prorate and adjust immediately
+
+## Report Tracking & Analytics System
+
+### Report Generation Metrics
+```sql
+report_analytics {
+  report_id: UUID
+  customer_id: UUID
+  generation_time_ms: integer
+  api_units_used: integer
+  report_type: enum ['free', 'startup', 'growth', 'enterprise']
+  competitors_analyzed: integer
+  keywords_found: integer
+  opportunities_identified: integer
+  generated_at: timestamp
+  delivery_method: enum ['email', 'dashboard', 'api']
+}
+```
+
+### Engagement Tracking
+```sql
+report_engagement {
+  report_id: UUID
+  opened_at: timestamp
+  time_on_page_seconds: integer
+  scroll_depth_percentage: integer
+  clicks: jsonb {
+    total: integer
+    competitor_links: integer
+    cta_clicks: integer
+    download_pdf: boolean
+  }
+  shared: boolean
+  conversion_event: enum ['trial_started', 'demo_requested', 'purchased']
+}
+```
+
+### Real-time Analytics Dashboard
+- **Daily Active Reports**: Track views, engagement
+- **Conversion Funnel**: Report view → Trial → Paid
+- **API Usage**: Real-time unit consumption
+- **Revenue Attribution**: Which reports drive sales
+- **A/B Testing**: Report format variations
+
+## Follow-Up Automation Sequences
+
+### Free Report Viewers (Email/LinkedIn)
+**Day 0**: Report delivered
+```
+Subject: Your MRC Competitive Analysis is Ready
+- Report link (expires in 7 days)
+- 3 key insights preview
+- CTA: "See Full Analysis"
+```
+
+**Day 3**: Engagement Check
+```
+Subject: Did you see where [Competitor] is beating you?
+- Specific metric from their report
+- Implementation tip
+- CTA: "Get Weekly Updates" → Paid tier
+```
+
+**Day 7**: Value Demonstration
+```
+Subject: Your competitors gained 2,400 visits this week
+- What changed since last report
+- Urgency: "Report expires tonight"
+- CTA: "Keep Monitoring" → 50% off first month
+```
+
+**Day 14**: Final Conversion Push
+```
+Subject: Last chance: Your competitive advantage
+- Success story from similar company
+- Limited time offer
+- CTA: "Start Free Trial" → Actually paid tier
+```
+
+### Paid Customer Success Sequence
+**Day 1**: Welcome & Onboarding
+- Video walkthrough
+- Best practices guide
+- Calendar link for success call
+
+**Week 1**: First Value Check
+- Usage analytics
+- Additional insights found
+- Tips for maximum value
+
+**Month 1**: Optimization Review
+- ROI report
+- Expansion opportunities
+- Referral program invite
+
+### Churn Prevention Automation
+**Low Usage Alert** (< 2 logins in 14 days)
+- Email: "Missing opportunities" with fresh insights
+- In-app: Popup with new competitor alert
+- SMS: For Growth/Enterprise only
+
+**Pre-Renewal Sequence** (14 days before)
+- Value summary: Insights delivered, ROI achieved
+- New features announcement
+- Loyalty discount for annual upgrade
+
+## Advanced Workflow Features
+
+### Dynamic Competitor Selection
+```javascript
+// Instead of fixed 6 competitors, adapt by tier:
+function selectCompetitors(customer, allCompetitors) {
+  if (customer.tier === 'enterprise') {
+    // Include international competitors
+    return [...allCompetitors.domestic.slice(0,4), 
+            ...allCompetitors.international.slice(0,2)];
+  } else if (customer.tier === 'growth') {
+    // Focus on direct competitors
+    return allCompetitors.direct.slice(0,6);
+  } else {
+    // Startup: Mix of aspirational and direct
+    return [...allCompetitors.direct.slice(0,3),
+            ...allCompetitors.aspirational.slice(0,3)];
+  }
+}
+```
+
+### Smart Report Caching
+```javascript
+// Cache strategy to reduce API calls
+const cacheRules = {
+  'free_report': {
+    ttl: 24 * 60 * 60 * 1000, // 24 hours
+    maxViews: 5,
+    regenerateIfStale: false
+  },
+  'paid_startup': {
+    ttl: 7 * 24 * 60 * 60 * 1000, // 7 days
+    maxViews: unlimited,
+    regenerateIfStale: true
+  },
+  'paid_growth': {
+    ttl: 24 * 60 * 60 * 1000, // 24 hours
+    maxViews: unlimited,
+    regenerateIfStale: true
+  }
+};
+```
+
+### Intelligent Rate Limiting
+```javascript
+// Prevent API abuse while ensuring good UX
+const rateLimits = {
+  semrush: {
+    requestsPerSecond: 10,
+    dailyLimit: 20000,
+    burstAllowance: 50,
+    queueStrategy: 'priority' // Enterprise first
+  },
+  claude: {
+    requestsPerMinute: 60,
+    tokensPerDay: 1000000,
+    fallbackModel: 'claude-instant' // If limits hit
+  },
+  reportGeneration: {
+    concurrentReports: 10,
+    queueTimeout: 300000, // 5 minutes
+    retryAttempts: 3
+  }
+};
+```
+
+## Free Report Distribution Implementation
+
+### Phase 1: Weekly Prospect Discovery (Sunday Night)
+
+#### LinkedIn Prospect Scraping (8 PM)
+**Volume**: 500-1000 prospects/week via Phantombuster
+**Data Collected**:
+- Full name, LinkedIn URL, Position
+- Company name, domain, size
+- Industry, Location
+
+**n8n Workflow**: LinkedIn Prospect Processor
+```
+[Phantombuster Webhook] → [Data Validation] → [Domain Extraction] → [Store in Supabase]
+```
+
+#### Email Prospect Discovery (9 PM)
+**Volume**: 4,000-5,000 prospects/week via Apollo.io
+**Filters**:
+- Revenue: $1M-$50M
+- Technologies: WordPress, Shopify, HubSpot
+- Ad spend indicators present
+- No existing SEO tools
+
+#### Competitive Intelligence Enrichment (10 PM - 2 AM)
+**Process**: Limited SEMrush enrichment (7 units per prospect)
+```javascript
+for (const prospect of prospects) {
+  // Minimal API calls for enrichment
+  const enrichment = {
+    domainOverview: await semrush.getDomain(prospect.domain), // 1 unit
+    topCompetitors: await semrush.getCompetitors(prospect.domain, 5), // 5 units
+    estimatedAdSpend: await semrush.getAdSpend(prospect.domain), // 1 unit
+  };
+  
+  // Calculate opportunity score
+  prospect.opportunityScore = calculateScore(enrichment);
+  prospect.enrichmentStatus = 'completed';
+}
+```
+
+### Phase 2: Personalized Outreach
+
+#### LinkedIn Daily Outreach (Mon-Fri, 9 AM)
+**Volume**: 17 connections/day (85/week total)
+**Claude Personalization**:
+```
+Prompt: "Create a 250-character LinkedIn connection request that:
+- Mentions their company by name
+- References their top competitor
+- Hints at missed opportunity without details
+- Sounds human, not salesy"
+
+Example: "Hi Sarah, noticed HealthyPets is competing with Chewy. 
+Found 3 keywords they're ranking for that you're missing - 
+could be worth 500+ visits/month. Happy to share the data."
+```
+
+#### Email Campaign (Mon-Fri, 10 AM - 2 PM)
+**Volume**: 833 emails/day
+**Industry Templates**:
+- SaaS: "Competitor feature comparison"
+- E-commerce: "Missed revenue keywords" 
+- Healthcare: "Patient acquisition gaps"
+- Services: "Local search opportunities"
+
+### Phase 3: Report Generation Strategy
+
+#### LinkedIn: Pre-generate Sunday Night
+- Generate all 85 reports in parallel batches
+- Store HTML in database with 7-day TTL
+- Link to prospect records
+
+#### Email: Generate On-Click Only
+- Unique tracking link per email
+- 3-5 minute generation time
+- 24-hour cache to prevent duplicates
+- Loading page with progress bar
+
+### Unique Link Security
+```javascript
+function generateSecureReportLink(prospect) {
+  const payload = {
+    prospect_id: prospect.id,
+    domain: prospect.company_domain,
+    ip_hash: hash(request.ip),
+    fingerprint: generateDeviceFingerprint(),
+    valid_for_hours: 168, // 7 days
+    single_use: false,
+    max_views: 5
+  };
+  
+  const token = jwt.sign(payload, process.env.JWT_SECRET);
+  return `${BASE_URL}/report/${token}`;
+}
+```
+
+### Success Metrics & Conversion Funnel
+- **Discovery**: 5,000 prospects/week
+- **Enrichment**: 95% success rate  
+- **Email CTR**: 2.5% = 448 clicks/month
+- **LinkedIn accepts**: 30% = 110/month
+- **Total report views**: 558/month
+- **Paid conversions**: 10% of viewers = 56/month
+- **MRR Growth**: $2,240/month (56 × $40 average)
+
+### Critical Implementation Constraints
+1. **NO bulk email report generation** - Only generate on click
+2. **LinkedIn limits**: Stay under 100 connections/week
+3. **SEMrush budget**: 30,000 units/month during free phase
+4. **Email reputation**: Never send from primary domain
+5. **GDPR compliance**: Include unsubscribe, honor immediately
