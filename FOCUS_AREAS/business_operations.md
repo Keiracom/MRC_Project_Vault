@@ -95,6 +95,12 @@ Low Priority (<50 score):
 
 ## Service Delivery Operations
 
+### Report Template Information (Updated 2025-06-26)
+- **Template**: MRC Startup Tier Template optimized for 3 competitors (reduced from 8 for API efficiency)
+- **Format**: HTML recommended over PDF for speed and flexibility
+- **Location**: FOCUS_AREAS/MRC_Startup_Tier_Template.md
+- **Integration**: Needs to be embedded in Report Generation Engine workflow (#6)
+
 ### Report Generation Process
 
 #### Monthly Reports (Startup Tier)
@@ -263,6 +269,27 @@ Operations: $1,000-3,000
 
 Total Monthly Costs: $3,385-6,385
 Target Gross Margin: 85-90%
+```
+
+### SEMrush API Cost Analysis (Updated 2025-06-26)
+```
+API Unit Pricing:
+- Cost per unit: $0.00005 ($1 for 20,000 units)
+- Business plan includes: 10,000 units/month free
+- Additional units: Purchased in 20,000 unit blocks
+
+Report Generation Costs:
+- Units per report (3 competitors): 380 units
+- Cost per report: ~$0.019
+- Monthly reports (813 total): 
+  - LinkedIn pre-generated: 365 reports/month
+  - Email on-demand: 448 reports/month (2.5% click rate)
+- Total units needed: 308,940 units/month
+- Additional units beyond plan: 298,940 units
+- Additional API cost: ~$15.45/month
+- Total SEMrush cost: $465.45/month (Business plan + API)
+
+Key Insight: API costs are ~1% of revenue, not a bottleneck
 ```
 
 ## Quality Control & Standards

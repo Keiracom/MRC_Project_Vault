@@ -24,13 +24,22 @@ n8n handles all automation, data processing, and workflow orchestration for the 
 
 ### ⏳ Planned Workflows (From Architecture - 20 Total)
 
-#### High Priority for Distribution (UPDATED 2024-12-27)
+#### High Priority for Distribution (UPDATED 2025-06-26)
 1. **Weekly LinkedIn Report Pre-Generator (#4-Modified)** - Sunday batch for 85 LinkedIn prospects ONLY
 2. **On-Demand Report Generator (#4-New)** - Triggered by email click, generates individual reports
 3. **Report Generation Engine (#6)** - Core report creation logic (uses LangChain nodes, not HTTP)
+   - Must integrate MRC Startup Tier Template from FOCUS_AREAS/MRC_Startup_Tier_Template.md
+   - HTML output format for speed and flexibility
+   - 3 competitor analysis (optimized from 8 for API efficiency)
 4. **LinkedIn Orchestrator (#8)** - 1 account/85 weekly with pre-generated reports
 5. **Email Campaign Manager (#9)** - Generates unique prospect links, no pre-generation
 6. **Report Request Handler (#9-Sub)** - Webhook handler for email clicks → triggers #4-New
+
+#### Current Workflow Availability
+- Payment Processing (#1) - ✅ Active
+- Subscription Management (#2) - ⏳ Available in architecture
+- Partner Commission (#3) - ⏳ Available in architecture
+- Report Generation Engine (#6) - 🔄 Needs LangChain node implementation
 
 #### Additional Workflows in Architecture
 - Subscription Management (#2)
@@ -51,10 +60,12 @@ n8n handles all automation, data processing, and workflow orchestration for the 
 
 ## Distribution Implementation Details
 
-### Volume Reality (Critical for Next Session)
-- **LinkedIn**: 1 account × 17/day = 85/WEEK (not 85/day as architecture suggests)
-- **Email**: 833/day = 4,165/week
-- **Report Generation**: ~415/month (340 LinkedIn pre-gen + 75 email on-demand)
+### Volume Reality (Updated 2025-06-26)
+- **LinkedIn**: 365 pre-generated reports/month (85/week)
+- **Email**: 448 on-demand reports/month (17,920 emails × 2.5% click rate)
+- **Total Reports**: 813 reports/month
+- **SEMrush API Units**: 308,940 units/month (380 units per report)
+- **API Cost**: ~$15.45/month additional (beyond included 10,000 units)
 
 ### Report Generation Strategy
 - **LinkedIn**: Pre-generate all 85 reports Sunday night for the week

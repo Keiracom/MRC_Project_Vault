@@ -218,4 +218,28 @@
 
 ---
 
+### Decision: LangChain Nodes for Report Generation Engine
+**Date**: 2025-06-26  
+**Decision**: Use n8n LangChain nodes (not HTTP Request) for Report Generation Engine workflow
+**Reasoning**:
+- Native integration with Claude API through nodes-langchain.lmChatAnthropic
+- Better error handling and retry logic built into LangChain nodes
+- Easier to implement complex report generation logic with AI Agent nodes
+- Previous HTTP Request advice was for simple Claude calls, not complex workflows
+**Alternatives Considered**: HTTP Request nodes, custom Code nodes, external services
+**Impact**: More reliable report generation, easier maintenance, better integration
+**Links**: [[report-generation-engine]] [[n8n-workflows]] [[claude-integration]]
+
+### Decision: Volume-Based Report Generation Strategy
+**Date**: 2025-06-26  
+**Decision**: Pre-generate LinkedIn reports weekly, generate email reports on-demand
+**Reasoning**:
+- LinkedIn: Only 365 reports/month, can batch process Sunday nights
+- Email: 448 potential reports/month but only 2.5% click rate justifies on-demand
+- Reduces wasted compute and API calls by 95% for email campaign
+- 3-5 minute generation time acceptable for on-demand email reports
+**Alternatives Considered**: Pre-generate all reports, all on-demand, hybrid by tier
+**Impact**: 95% reduction in unnecessary report generation, cost optimization
+**Links**: [[distribution-strategy]] [[workflow-optimization]] [[cost-management]]
+
 **Note**: These decisions represent the foundation of the MRC platform. Changes should be carefully considered and documented to maintain system coherence and business strategy alignment.

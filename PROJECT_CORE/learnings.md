@@ -218,4 +218,32 @@
 
 ---
 
+### Learning: SEMrush API Pricing Calculation Error
+**Date**: 2025-06-26  
+**Discovery**: Initial API cost calculation was 4,000x too high due to misreading pricing structure
+**Context**: Calculated $0.20/unit instead of $0.00005/unit, creating false cost concerns
+**Application**: Always verify unit pricing directly from vendor documentation, not assumptions
+**Links**: [[cost-management]] [[api-pricing]] [[semrush-integration]]
+
+### Learning: Free Report Strategy Viable with Correct API Costs
+**Date**: 2025-06-26  
+**Discovery**: 813 monthly reports cost only ~$15.45 in API fees, making free reports profitable
+**Context**: Previous calculation showed $78,000/month cost, making strategy impossible
+**Application**: Data costs are ~1% of revenue, focus on customer acquisition not API optimization
+**Links**: [[distribution-strategy]] [[cost-analysis]] [[business-model]]
+
+### Learning: HTML Format Superior to PDF for Report Generation
+**Date**: 2025-06-26  
+**Discovery**: HTML reports generate faster, display better on mobile, and are easier to template
+**Context**: Evaluating report format options for scale and user experience
+**Application**: Use HTML for all report generation, PDF only if specifically requested
+**Links**: [[report-generation]] [[mobile-optimization]] [[template-design]]
+
+### Learning: Reducing Competitor Count Optimizes API Usage
+**Date**: 2025-06-26  
+**Discovery**: 3 competitors per report (vs 8) reduces API calls by 62% with minimal value loss
+**Context**: Optimizing template for cost efficiency while maintaining report quality
+**Application**: Focus on top 3 competitors for free reports, offer more in paid tiers
+**Links**: [[api-optimization]] [[report-quality]] [[tier-differentiation]]
+
 **Note**: These learnings represent hard-won knowledge from building and operating the MRC platform. They should inform all future decisions and help avoid repeating expensive mistakes.

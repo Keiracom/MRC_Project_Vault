@@ -17,17 +17,20 @@ Multi-platform competitive intelligence service with automated reporting, dashbo
 - **Revenue**: $0 (system ready for customers)
 
 ### Critical Implementation Notes
-- **LinkedIn Distribution**: 1 account only (85 connections/week, not daily)
-- **Email Distribution**: 833/day = 4,165/week
-- **Report Strategy**: LinkedIn pre-generated, Email on-demand
+- **LinkedIn Distribution**: 365 pre-generated reports/month
+- **Email Distribution**: 448 on-demand reports/month (1.8% click → 20% convert)
+- **Total Reports**: 813/month at ~$26.42 API cost (6 competitors)
+- **Report Strategy**: LinkedIn pre-generated Sunday nights, Email on-demand
 - **Payment Flow**: Must be immediate report delivery (remove 48hr delay)
+- **API Costs**: $0.00005/unit = $0.0325 per report (650 units × 6 competitors)
+- **Report Format**: HTML with PDF download option (not PDF primary)
 
 ### Completed This Session
-- ✅ GitHub repository reset with clean history - 2025-01-30
-- ✅ Connection status documented for all integrations - 2025-01-30
-- ✅ GitHub integration guide created with security fixes - 2025-01-30
-- ✅ Discovered 3 n8n workflow JSON files ready for import - 2025-01-30
-- ✅ Identified critical workflow fixes needed (payment delay, LinkedIn volume) - 2025-01-30
+- ✅ SEMrush API cost analysis corrected (4,000x error found) - 2025-01-30
+- ✅ Final decision: 6 competitors optimal (650 units, $0.0325/report) - 2025-01-30
+- ✅ HTML report format chosen over PDF for speed/flexibility - 2025-01-30
+- ✅ Report Generation Engine (#6) requirements defined - 2025-01-30
+- ✅ All critical session decisions documented - 2025-01-30
 
 ### Service Tiers
 - **Startup**: $297/month - Monthly reports, 1-3 competitors
@@ -40,7 +43,7 @@ Multi-platform competitive intelligence service with automated reporting, dashbo
 - **Competitive Position**: Against agencies/consultants ($5-10K/month), not tools
 
 ## 🚨 Current Focus
-**Today's Priority**: GitHub integration fixed, ready for workflow modifications
+**Today's Priority**: All major decisions finalized - ready to build Report Generation Engine (#6)
 
 **This Week**: 
 1. Modify Payment Processing for immediate reports
@@ -59,7 +62,7 @@ Multi-platform competitive intelligence service with automated reporting, dashbo
 - **Automation**: n8n Cloud ($50/month)
 - **Database**: Supabase (business operations schema)
 - **AI Processing**: Claude API (~$100/month)
-- **Data Sources**: SEMrush Business ($500/month)
+- **Data Sources**: SEMrush Business ($465.45/month total - includes API units)
 - **Payments**: Stripe (3% fees)
 - **Email**: SendGrid for transactional
 - **CRM**: HubSpot Free tier
@@ -79,7 +82,8 @@ Multi-platform competitive intelligence service with automated reporting, dashbo
 ## 🚨 Critical Rules & Constraints
 
 ### Technical
-- Use HTTP Request nodes for Claude API (not Basic LLM chains)
+- Use LangChain nodes for Report Generation Engine (#6) - NOT HTTP Request
+- Use HTTP Request nodes for simple Claude API calls only
 - All n8n workflows must be complete JSON (no manual UI work)
 - Supabase requires RLS policies for security
 - Never use primary domain for cold outreach
