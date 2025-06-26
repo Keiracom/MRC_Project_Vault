@@ -1,0 +1,455 @@
+{
+  "name": "03 - Partner Commission Calculator",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "months",
+              "monthsInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "a3f8e9d1-4b2c-4d3e-8f9g-0h1i2j3k4l5m",
+      "name": "Monthly Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Get all active partner referrals with commission details\nSELECT \n    pr.id as referral_id,\n    pr.partner_id,\n    p.partner_name,\n    p.contact_email,\n    p.commission_rate,\n    p.stripe_connect_account_id,\n    pr.customer_id,\n    c.email as customer_email,\n    c.tier as customer_tier,\n    c.status as customer_status,\n    pr.monthly_value_cents,\n    pr.commission_percentage,\n    pr.commission_status,\n    pr.referral_date,\n    pr.conversion_date,\n    -- Calculate commission\n    CASE \n        WHEN c.status = 'active' THEN \n            ROUND((pr.monthly_value_cents * COALESCE(pr.commission_percentage, p.commission_rate) / 100)::numeric, 0)::integer\n        ELSE 0\n    END as commission_amount_cents,\n    -- Calculate tier-based monthly value if not set\n    CASE \n        WHEN pr.monthly_value_cents IS NULL OR pr.monthly_value_cents = 0 THEN\n            CASE c.tier\n                WHEN 'startup' THEN 29700\n                WHEN 'growth' THEN 69700\n                WHEN 'enterprise' THEN 129700\n                ELSE 0\n            END\n        ELSE pr.monthly_value_cents\n    END as calculated_monthly_value\nFROM partner_referrals pr\nJOIN partners p ON pr.partner_id = p.id\nJOIN customers c ON pr.customer_id = c.id\nWHERE p.status = 'active'\n  AND pr.status = 'converted'\n  AND c.status = 'active'\n  AND pr.commission_status IN ('pending', 'calculated')\n  AND pr.conversion_date <= NOW() - INTERVAL '30 days'\nORDER BY pr.partner_id, pr.conversion_date;",
+        "options": {
+          "queryBatching": "all"
+        }
+      },
+      "id": "b4f9e0d2-5c3d-4e4f-9g0h-1i2j3k4l5m6n",
+      "name": "Query Active Referrals",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        420,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "supabase-mrc",
+          "name": "Supabase MRC"
+        }
+      },
+      "onError": "continueOnFail"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Get recent chargebacks to deduct from commissions\nSELECT \n    pr.partner_id,\n    pr.id as referral_id,\n    pr.monthly_value_cents,\n    pr.commission_earned_cents,\n    c.email as customer_email,\n    p.partner_name\nFROM partner_referrals pr\nJOIN partners p ON pr.partner_id = p.id\nJOIN customers c ON pr.customer_id = c.id\nWHERE c.status = 'cancelled'\n  AND c.updated_at >= NOW() - INTERVAL '30 days'\n  AND pr.commission_status = 'paid'\n  AND pr.commission_paid_date >= NOW() - INTERVAL '90 days'\nORDER BY pr.partner_id;",
+        "options": {
+          "queryBatching": "all"
+        }
+      },
+      "id": "c5g0f1e3-6d4e-5f5g-0h1i-2j3k4l5m6n7o",
+      "name": "Query Chargebacks",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        420,
+        460
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "supabase-mrc",
+          "name": "Supabase MRC"
+        }
+      },
+      "onError": "continueOnFail"
+    },
+    {
+      "parameters": {
+        "mode": "multiplex"
+      },
+      "id": "d6h1g2f4-7e5f-6g6h-1i2j-3k4l5m6n7o8p",
+      "name": "Merge Data",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        620,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process referrals and chargebacks to calculate commissions per partner\nconst referrals = $input.first().json;\nconst chargebacks = $input.last().json || [];\n\n// Group by partner\nconst partnerCommissions = {};\n\n// Process active referrals\nfor (const referral of referrals) {\n  const partnerId = referral.partner_id;\n  \n  if (!partnerCommissions[partnerId]) {\n    partnerCommissions[partnerId] = {\n      partner_id: partnerId,\n      partner_name: referral.partner_name,\n      contact_email: referral.contact_email,\n      stripe_connect_account_id: referral.stripe_connect_account_id,\n      referrals: [],\n      chargebacks: [],\n      total_commission_cents: 0,\n      total_chargebacks_cents: 0,\n      net_commission_cents: 0,\n      referral_count: 0,\n      chargeback_count: 0\n    };\n  }\n  \n  // Calculate commission amount\n  const monthlyValue = referral.calculated_monthly_value || referral.monthly_value_cents;\n  const commissionRate = referral.commission_percentage || referral.commission_rate || 30;\n  const commissionAmount = Math.round((monthlyValue * commissionRate) / 100);\n  \n  partnerCommissions[partnerId].referrals.push({\n    referral_id: referral.referral_id,\n    customer_email: referral.customer_email,\n    customer_tier: referral.customer_tier,\n    monthly_value_cents: monthlyValue,\n    commission_amount_cents: commissionAmount,\n    conversion_date: referral.conversion_date\n  });\n  \n  partnerCommissions[partnerId].total_commission_cents += commissionAmount;\n  partnerCommissions[partnerId].referral_count += 1;\n}\n\n// Process chargebacks\nfor (const chargeback of chargebacks) {\n  const partnerId = chargeback.partner_id;\n  \n  if (partnerCommissions[partnerId]) {\n    partnerCommissions[partnerId].chargebacks.push({\n      referral_id: chargeback.referral_id,\n      customer_email: chargeback.customer_email,\n      chargeback_amount_cents: chargeback.commission_earned_cents\n    });\n    \n    partnerCommissions[partnerId].total_chargebacks_cents += chargeback.commission_earned_cents;\n    partnerCommissions[partnerId].chargeback_count += 1;\n  }\n}\n\n// Calculate net commissions\nconst results = [];\nfor (const partnerId in partnerCommissions) {\n  const partner = partnerCommissions[partnerId];\n  partner.net_commission_cents = partner.total_commission_cents - partner.total_chargebacks_cents;\n  \n  // Only include partners with positive net commission\n  if (partner.net_commission_cents > 0) {\n    // Add period information\n    partner.payment_period_start = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];\n    partner.payment_period_end = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0];\n    \n    results.push(partner);\n  }\n}\n\nreturn results;"
+      },
+      "id": "e7i2h3g5-8f6g-7h7i-2j3k-4l5m6n7o8p9q",
+      "name": "Calculate Commissions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        820,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.net_commission_cents }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f8j3i4h6-9g7h-8i8j-3k4l-5m6n7o8p9q0r",
+      "name": "Has Commission?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1020,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Record commission payment in database\nINSERT INTO commission_payments (\n    partner_id,\n    payment_period_start,\n    payment_period_end,\n    total_commission_cents,\n    payment_method,\n    referral_count,\n    payment_status,\n    notes\n) VALUES (\n    '{{ $json.partner_id }}',\n    '{{ $json.payment_period_start }}',\n    '{{ $json.payment_period_end }}',\n    {{ $json.net_commission_cents }},\n    'stripe_connect',\n    {{ $json.referral_count }},\n    'pending',\n    'Automated monthly commission calculation'\n)\nRETURNING id, partner_id, total_commission_cents;",
+        "options": {}
+      },
+      "id": "g9k4j5i7-0h8i-9j9k-4l5m-6n7o8p9q0r1s",
+      "name": "Log Commission Payment",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1220,
+        320
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "supabase-mrc",
+          "name": "Supabase MRC"
+        }
+      },
+      "onError": "continueOnFail"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.stripe.com/v1/transfers",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "stripeApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/x-www-form-urlencoded"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "amount",
+              "value": "={{ $json.net_commission_cents }}"
+            },
+            {
+              "name": "currency",
+              "value": "aud"
+            },
+            {
+              "name": "destination",
+              "value": "={{ $json.stripe_connect_account_id }}"
+            },
+            {
+              "name": "description",
+              "value": "MRC Partner Commission - {{ $json.payment_period_start }} to {{ $json.payment_period_end }}"
+            },
+            {
+              "name": "metadata[partner_id]",
+              "value": "={{ $json.partner_id }}"
+            },
+            {
+              "name": "metadata[commission_payment_id]",
+              "value": "={{ $('Log Commission Payment').item.json.id }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "h0l5k6j8-1i9j-0k0l-5m6n-7o8p9q0r1s2t",
+      "name": "Stripe Transfer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1420,
+        320
+      ],
+      "credentials": {
+        "stripeApi": {
+          "id": "stripe-live",
+          "name": "Stripe Live"
+        }
+      },
+      "onError": "continueOnFail"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Update payment status and Stripe transfer ID\nUPDATE commission_payments\nSET \n    payment_status = CASE \n        WHEN '{{ $node[\"Stripe Transfer\"].json.error }}' != '' THEN 'failed'\n        ELSE 'completed'\n    END,\n    stripe_transfer_id = CASE \n        WHEN '{{ $node[\"Stripe Transfer\"].json.error }}' = '' THEN '{{ $node[\"Stripe Transfer\"].json.id }}'\n        ELSE NULL\n    END,\n    payment_date = NOW(),\n    notes = CASE \n        WHEN '{{ $node[\"Stripe Transfer\"].json.error }}' != '' THEN \n            notes || ' | Error: {{ $node[\"Stripe Transfer\"].json.error.message }}'\n        ELSE notes\n    END\nWHERE id = '{{ $node[\"Log Commission Payment\"].json.id }}';\n\n-- Update referral commission status\nUPDATE partner_referrals\nSET \n    commission_status = CASE \n        WHEN '{{ $node[\"Stripe Transfer\"].json.error }}' != '' THEN 'calculated'\n        ELSE 'paid'\n    END,\n    commission_paid_date = CASE \n        WHEN '{{ $node[\"Stripe Transfer\"].json.error }}' = '' THEN NOW()\n        ELSE NULL\n    END,\n    commission_earned_cents = CASE\n        WHEN partner_id = '{{ $json.partner_id }}' AND customer_id IN (\n            SELECT customer_id FROM partner_referrals \n            WHERE partner_id = '{{ $json.partner_id }}' \n            AND status = 'converted'\n            AND commission_status IN ('pending', 'calculated')\n        )\n        THEN ROUND((monthly_value_cents * COALESCE(commission_percentage, 30) / 100)::numeric, 0)::integer\n        ELSE commission_earned_cents\n    END\nWHERE partner_id = '{{ $json.partner_id }}'\n  AND status = 'converted'\n  AND commission_status IN ('pending', 'calculated');",
+        "options": {}
+      },
+      "id": "i1m6l7k9-2j0k-1l1m-6n7o-8p9q0r1s2t3u",
+      "name": "Update Payment Status",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1620,
+        320
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "supabase-mrc",
+          "name": "Supabase MRC"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.sendgrid.com/v3/mail/send",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "sendGridApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "={\n  \"personalizations\": [\n    {\n      \"to\": [\n        {\n          \"email\": \"{{ $json.contact_email }}\",\n          \"name\": \"{{ $json.partner_name }}\"\n        }\n      ],\n      \"dynamic_template_data\": {\n        \"partner_name\": \"{{ $json.partner_name }}\",\n        \"payment_period\": \"{{ $json.payment_period_start }} to {{ $json.payment_period_end }}\",\n        \"referral_count\": {{ $json.referral_count }},\n        \"total_commission\": \"${{ ($json.total_commission_cents / 100).toFixed(2) }}\",\n        \"total_chargebacks\": \"${{ ($json.total_chargebacks_cents / 100).toFixed(2) }}\",\n        \"net_commission\": \"${{ ($json.net_commission_cents / 100).toFixed(2) }}\",\n        \"referrals\": {{ JSON.stringify($json.referrals.map(r => ({\n          customer: r.customer_email,\n          tier: r.customer_tier,\n          value: \"$\" + (r.monthly_value_cents / 100).toFixed(2),\n          commission: \"$\" + (r.commission_amount_cents / 100).toFixed(2)\n        }))) }},\n        \"payment_status\": \"{{ $node[\"Stripe Transfer\"].json.error ? 'Failed - Please contact support' : 'Completed via Stripe Connect' }}\",\n        \"transfer_id\": \"{{ $node[\"Stripe Transfer\"].json.id || 'N/A' }}\"\n      }\n    }\n  ],\n  \"template_id\": \"d-partner_commission_statement\",\n  \"from\": {\n    \"email\": \"hello@keiracom.com\",\n    \"name\": \"MRC Partner Program\"\n  },\n  \"reply_to\": {\n    \"email\": \"partners@keiracom.com\",\n    \"name\": \"MRC Partner Support\"\n  }\n}",
+        "options": {}
+      },
+      "id": "j2n7m8l0-3k1l-2m2n-7o8p-9q0r1s2t3u4v",
+      "name": "Send Commission Statement",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1820,
+        320
+      ],
+      "credentials": {
+        "sendGridApi": {
+          "id": "sendgrid-mrc",
+          "name": "SendGrid MRC"
+        }
+      },
+      "onError": "continueOnFail"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Log the commission calculation run\nINSERT INTO business_operations_log (\n    operation_name,\n    operation_status,\n    message,\n    details\n) VALUES (\n    'partner_commission_calculator',\n    'success',\n    'Monthly partner commission calculation completed',\n    jsonb_build_object(\n        'partners_processed', {{ $items().length }},\n        'total_commissions_cents', {{ $items().reduce((sum, item) => sum + (item.json.net_commission_cents || 0), 0) }},\n        'execution_date', NOW()\n    )\n);",
+        "options": {}
+      },
+      "id": "k3o8n9m1-4l2m-3n3o-8p9q-0r1s2t3u4v5w",
+      "name": "Log Operation",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2020,
+        380
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "supabase-mrc",
+          "name": "Supabase MRC"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Partner Commission Calculator\n\n**Workflow #3 from MRC Architecture**\n\n### Trigger\n- Monthly on the 1st at 2 AM\n\n### Process\n1. Query active partner referrals\n2. Query recent chargebacks\n3. Calculate 30% commission per partner\n4. Process Stripe Connect payouts\n5. Send commission statements\n6. Log all transactions\n\n### Error Handling\n- All external API calls have \"Continue on Fail\"\n- Failed payments are logged but don't stop the workflow\n- Email failures don't block payment processing",
+        "height": 400,
+        "width": 300
+      },
+      "id": "l4p9o0n2-5m3n-4o4p-9q0r-1s2t3u4v5w6x",
+      "name": "Workflow Notes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        80,
+        200
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Monthly Trigger": {
+      "main": [
+        [
+          {
+            "node": "Query Active Referrals",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Query Chargebacks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Active Referrals": {
+      "main": [
+        [
+          {
+            "node": "Merge Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Chargebacks": {
+      "main": [
+        [
+          {
+            "node": "Merge Data",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Data": {
+      "main": [
+        [
+          {
+            "node": "Calculate Commissions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Commissions": {
+      "main": [
+        [
+          {
+            "node": "Has Commission?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Commission?": {
+      "main": [
+        [
+          {
+            "node": "Log Commission Payment",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Operation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Commission Payment": {
+      "main": [
+        [
+          {
+            "node": "Stripe Transfer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stripe Transfer": {
+      "main": [
+        [
+          {
+            "node": "Update Payment Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Payment Status": {
+      "main": [
+        [
+          {
+            "node": "Send Commission Statement",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Commission Statement": {
+      "main": [
+        [
+          {
+            "node": "Log Operation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "bf1e525d-9ae0-4bde-bd87-b68226996a74"
+  },
+  "id": "partner-commission-calculator-v1",
+  "tags": [
+    {
+      "name": "MRC",
+      "createdAt": "2024-12-19T00:00:00.000Z"
+    },
+    {
+      "name": "Financial",
+      "createdAt": "2024-12-19T00:00:00.000Z"
+    }
+  ]
+}

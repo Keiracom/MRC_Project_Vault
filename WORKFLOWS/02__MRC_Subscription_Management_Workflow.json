@@ -1,0 +1,752 @@
+{
+  "name": "02. MRC Subscription Management Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "stripe-subscription-updated",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a4ef0423-83f2-4154-a363-1ecd5e5f8d74",
+      "name": "Webhook - Stripe Subscription",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "8a9c4f3e-subscription-updates"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "trial-ending",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "59800225-83ac-47c8-b9b5-bb52a1926e42",
+      "name": "Webhook - Trial Ending",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        200
+      ],
+      "webhookId": "7b8d5e2f-trial-alerts"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 6 * * *"
+            }
+          ]
+        }
+      },
+      "id": "4ff67027-5b53-47fc-bd53-54c721f59d61",
+      "name": "Schedule - Daily Failed Payment Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "c0358edb-552a-4385-8a23-941c21275d3c",
+      "name": "Set Trigger Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [
+        200,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://your-project.supabase.co/rest/v1/workflow_logs",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "workflow_name",
+              "value": "subscription_management"
+            },
+            {
+              "name": "status",
+              "value": "running"
+            },
+            {
+              "name": "customer_email",
+              "value": "={{ $json.data?.object?.customer_email || $json.customer_email || null }}"
+            },
+            {
+              "name": "trigger_source",
+              "value": "={{ $json.webhook_source }}"
+            },
+            {
+              "name": "metadata",
+              "value": "={{ JSON.stringify({event_type: $json.event_type, timestamp: new Date().toISOString()}) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1e7a7775-2f7f-4f08-a98d-3278f0efb1c4",
+      "name": "Log Workflow Start",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        400,
+        200
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.event_type }}",
+                    "rightValue": "customer.subscription.updated",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "UPGRADE_DOWNGRADE"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.event_type }}",
+                    "rightValue": "customer.subscription.trial_will_end",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "TRIAL_ENDING"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.event_type }}",
+                    "rightValue": "invoice.payment_failed",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  },
+                  {
+                    "leftValue": "={{ $json.event_type }}",
+                    "rightValue": "failed_payment_check",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "FAILED_PAYMENT"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ad6a9010-5324-4beb-9fc5-04e0191774d5",
+      "name": "Identify Change Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        600,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Handle Upgrade/Downgrade Logic\nconst stripeData = $input.first().json.data?.object || $input.first().json;\nconst previousTier = stripeData.previous_attributes?.items?.data?.[0]?.price?.metadata?.tier || 'startup';\nconst newTier = stripeData.items?.data?.[0]?.price?.metadata?.tier || 'startup';\nconst customerId = stripeData.customer;\nconst subscriptionId = stripeData.id;\n\n// Determine if upgrade or downgrade\nconst tierOrder = {'startup': 1, 'growth': 2, 'enterprise': 3};\nconst isUpgrade = tierOrder[newTier] > tierOrder[previousTier];\n\nreturn {\n  change_type: isUpgrade ? 'upgrade' : 'downgrade',\n  previous_tier: previousTier,\n  new_tier: newTier,\n  customer_id: customerId,\n  subscription_id: subscriptionId,\n  competitor_limits: {\n    'startup': 3,\n    'growth': 10,\n    'enterprise': 25\n  }[newTier],\n  features: {\n    dashboard_access: newTier !== 'startup',\n    oauth_enabled: newTier === 'enterprise',\n    weekly_alerts: newTier !== 'startup'\n  }\n};"
+      },
+      "id": "039df275-03a2-437a-9628-cde3336c1db8",
+      "name": "Process Tier Change",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ 'https://your-project.supabase.co/rest/v1/customers?subscription_id=eq.' + $json.subscription_id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "tier",
+              "value": "={{ $json.new_tier }}"
+            },
+            {
+              "name": "competitor_count",
+              "value": "={{ $json.competitor_limits }}"
+            },
+            {
+              "name": "updated_at",
+              "value": "={{ new Date().toISOString() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "965a059d-a794-496e-9b64-b07175dbf46f",
+      "name": "Update Customer Tier",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1000,
+        0
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "resource": "mail",
+        "toEmail": "={{ $json.customer_email }}",
+        "dynamicTemplate": true,
+        "templateId": "={{ $json.change_type === 'upgrade' ? 'd-upgrade-confirmation' : 'd-downgrade-confirmation' }}",
+        "additionalFields": {}
+      },
+      "id": "4f3040eb-0fd2-4d09-bfa4-1ce77bf0cbb8",
+      "name": "Send Tier Change Email",
+      "type": "n8n-nodes-base.sendGrid",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Handle Trial Ending Logic\nconst trialData = $input.first().json.data?.object || $input.first().json;\nconst customerId = trialData.customer;\nconst trialEndDate = new Date(trialData.trial_end * 1000);\nconst daysUntilEnd = Math.ceil((trialEndDate - new Date()) / (1000 * 60 * 60 * 24));\n\nreturn {\n  customer_id: customerId,\n  customer_email: trialData.customer_email,\n  trial_end_date: trialEndDate.toISOString(),\n  days_until_end: daysUntilEnd,\n  tier: trialData.items?.data?.[0]?.price?.metadata?.tier || 'startup'\n};"
+      },
+      "id": "b4d7fb7b-7feb-4696-b671-b5be62bc53fd",
+      "name": "Process Trial Ending",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        820,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://your-project.supabase.co/rest/v1/dashboard_logins?customer_id=eq.' + $json.customer_id + '&created_at=gte.' + new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString() }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "count=exact"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "25de8b72-f3aa-45e6-882c-73b69fc1c2e6",
+      "name": "Check Dashboard Usage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1000,
+        200
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calculate engagement score and prepare email\nconst dashboardLogins = $('Check Dashboard Usage').first().json;\nconst loginCount = parseInt($('Check Dashboard Usage').first().headers['content-range']?.split('/')[1] || '0');\nconst trialData = $('Process Trial Ending').first().json;\n\n// Calculate engagement score (0-100)\nlet engagementScore = 0;\nif (loginCount >= 5) engagementScore = 100;\nelse if (loginCount >= 3) engagementScore = 75;\nelse if (loginCount >= 1) engagementScore = 50;\nelse engagementScore = 25;\n\n// Determine email template based on engagement\nlet emailTemplate = 'd-trial-ending-low-engagement';\nif (engagementScore >= 75) emailTemplate = 'd-trial-ending-high-engagement';\nelse if (engagementScore >= 50) emailTemplate = 'd-trial-ending-medium-engagement';\n\nreturn {\n  customer_email: trialData.customer_email,\n  engagement_score: engagementScore,\n  login_count: loginCount,\n  days_until_end: trialData.days_until_end,\n  email_template: emailTemplate,\n  tier: trialData.tier\n};"
+      },
+      "id": "4d145784-59a5-4b6a-9c20-ef116f019e8e",
+      "name": "Calculate Engagement Score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "mail",
+        "toEmail": "={{ $json.customer_email }}",
+        "dynamicTemplate": true,
+        "templateId": "={{ $json.email_template }}",
+        "additionalFields": {}
+      },
+      "id": "4a1230c1-f4a1-48cb-8632-a1faab902138",
+      "name": "Send Trial Ending Email",
+      "type": "n8n-nodes-base.sendGrid",
+      "typeVersion": 1,
+      "position": [
+        1400,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://your-project.supabase.co/rest/v1/customers?status=eq.active&select=id,email,subscription_id,stripe_customer_id",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "options": {}
+      },
+      "id": "f21b006b-2f75-4a2d-b6ed-9cdcb9fb0ea4",
+      "name": "Get Active Customers",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        800,
+        400
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "batchSize": 5,
+        "options": {}
+      },
+      "id": "84cc0242-94a4-436f-907a-ac2775ebcb16",
+      "name": "Batch Customers",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1000,
+        400
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "b6a5be8e-c00c-4481-bbad-4f0b33b5fc46",
+      "name": "Check Stripe Failed Payments",
+      "type": "n8n-nodes-base.stripe",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process failed payments\nconst failedPayments = $input.all();\nconst processedPayments = [];\n\nfor (const payment of failedPayments) {\n  const paymentData = payment.json;\n  \n  // Only process if payment failed in last 24 hours\n  const failedAt = new Date(paymentData.created * 1000);\n  const hoursSinceFailed = (new Date() - failedAt) / (1000 * 60 * 60);\n  \n  if (hoursSinceFailed <= 24) {\n    processedPayments.push({\n      customer_id: paymentData.customer,\n      customer_email: paymentData.customer_email,\n      amount_cents: paymentData.amount_due,\n      currency: paymentData.currency,\n      attempt_count: paymentData.attempt_count,\n      next_payment_attempt: paymentData.next_payment_attempt ? new Date(paymentData.next_payment_attempt * 1000).toISOString() : null,\n      invoice_id: paymentData.id\n    });\n  }\n}\n\nreturn processedPayments;"
+      },
+      "id": "929f5a04-d9d0-4f9d-b1ac-f2e44a38e67b",
+      "name": "Process Failed Payments",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1400,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "mail",
+        "toEmail": "={{ $json.customer_email }}",
+        "dynamicTemplate": true,
+        "templateId": "d-payment-failed",
+        "additionalFields": {}
+      },
+      "id": "f546c40c-71bc-4269-b8c0-ac8a82776900",
+      "name": "Send Payment Failed Email",
+      "type": "n8n-nodes-base.sendGrid",
+      "typeVersion": 1,
+      "position": [
+        1600,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "c48d7d27-2cc2-4bc1-9b7b-a523bfd5b89e",
+      "name": "Calculate Execution Time",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [
+        1800,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://your-project.supabase.co/rest/v1/workflow_logs",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "workflow_name",
+              "value": "subscription_management"
+            },
+            {
+              "name": "status",
+              "value": "success"
+            },
+            {
+              "name": "execution_time_seconds",
+              "value": "={{ $json.execution_time_seconds }}"
+            },
+            {
+              "name": "metadata",
+              "value": "={{ JSON.stringify({completed_at: new Date().toISOString(), items_processed: $items().length}) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a51dbbac-c645-4fbb-b469-ed2570802168",
+      "name": "Log Workflow Complete",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2000,
+        200
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {}
+      },
+      "id": "66b32179-af26-4e79-956a-d85bb73e5db5",
+      "name": "Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        2200,
+        200
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook - Stripe Subscription": {
+      "main": [
+        [
+          {
+            "node": "Set Trigger Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook - Trial Ending": {
+      "main": [
+        [
+          {
+            "node": "Set Trigger Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule - Daily Failed Payment Check": {
+      "main": [
+        [
+          {
+            "node": "Set Trigger Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Trigger Data": {
+      "main": [
+        [
+          {
+            "node": "Log Workflow Start",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Workflow Start": {
+      "main": [
+        [
+          {
+            "node": "Identify Change Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Identify Change Type": {
+      "main": [
+        [
+          {
+            "node": "Process Tier Change",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Process Trial Ending",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Active Customers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Tier Change": {
+      "main": [
+        [
+          {
+            "node": "Update Customer Tier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Customer Tier": {
+      "main": [
+        [
+          {
+            "node": "Send Tier Change Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Tier Change Email": {
+      "main": [
+        [
+          {
+            "node": "Calculate Execution Time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Trial Ending": {
+      "main": [
+        [
+          {
+            "node": "Check Dashboard Usage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Dashboard Usage": {
+      "main": [
+        [
+          {
+            "node": "Calculate Engagement Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Engagement Score": {
+      "main": [
+        [
+          {
+            "node": "Send Trial Ending Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Trial Ending Email": {
+      "main": [
+        [
+          {
+            "node": "Calculate Execution Time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Active Customers": {
+      "main": [
+        [
+          {
+            "node": "Batch Customers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Batch Customers": {
+      "main": [
+        [
+          {
+            "node": "Check Stripe Failed Payments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Stripe Failed Payments": {
+      "main": [
+        [
+          {
+            "node": "Process Failed Payments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Failed Payments": {
+      "main": [
+        [
+          {
+            "node": "Send Payment Failed Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Payment Failed Email": {
+      "main": [
+        [
+          {
+            "node": "Calculate Execution Time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Execution Time": {
+      "main": [
+        [
+          {
+            "node": "Log Workflow Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Workflow Complete": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "6935d758-3b3e-4f90-bc22-f524e1c34b68",
+  "meta": {
+    "instanceId": "2697291d9e6c47bc5e237144fb9526675911e090c8adccc9380f146856863668"
+  },
+  "id": "zEXcQQeReaXiKvPZ",
+  "tags": []
+}

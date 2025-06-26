@@ -1,0 +1,531 @@
+{
+  "name": "01. Payment Processing & Onboarding",
+  "nodes": [
+    {
+      "parameters": {
+        "events": [
+          "checkout.session.completed",
+          "customer.subscription.created"
+        ]
+      },
+      "id": "stripe-trigger",
+      "name": "Stripe Payment Webhook",
+      "type": "n8n-nodes-base.stripeTrigger",
+      "position": [
+        300,
+        300
+      ],
+      "webhookId": "payment-success",
+      "typeVersion": 1,
+      "credentials": {
+        "stripeApi": {
+          "id": "R8YqgUaTaB6frB8p",
+          "name": "Stripe API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract data from Stripe event\nconst stripeEvent = $input.all()[0].json;\nconst eventType = stripeEvent.type;\nconst eventData = stripeEvent.data.object;\n\n// Initialize variables\nlet customerEmail = '';\nlet subscriptionId = '';\nlet customerId = '';\nlet amount = 0;\nlet tier = '';\nlet productId = '';\n\n// Handle different event types\nif (eventType === 'checkout.session.completed') {\n  customerEmail = eventData.customer_email || eventData.customer_details?.email || '';\n  subscriptionId = eventData.subscription;\n  customerId = eventData.customer;\n  amount = eventData.amount_total;\n  \n  // Determine tier based on amount (in cents)\n  if (amount === 29700) {\n    tier = 'startup';\n  } else if (amount === 69700) {\n    tier = 'growth';\n  } else if (amount === 129700) {\n    tier = 'enterprise';\n  }\n} else if (eventType === 'customer.subscription.created') {\n  subscriptionId = eventData.id;\n  customerId = eventData.customer;\n  // We'll need to fetch customer details in the next node\n  \n  // Determine tier based on price\n  const priceId = eventData.items?.data[0]?.price?.id;\n  // Map your actual Stripe price IDs here\n  if (priceId === 'price_startup') {\n    tier = 'startup';\n    amount = 29700;\n  } else if (priceId === 'price_growth') {\n    tier = 'growth';\n    amount = 69700;\n  } else if (priceId === 'price_enterprise') {\n    tier = 'enterprise';\n    amount = 129700;\n  }\n}\n\n// Extract domain from email\nconst extractDomain = (email) => {\n  if (!email) return '';\n  const match = email.match(/@([a-zA-Z0-9.-]+\\.[a-zA-Z]{2,})$/);\n  return match ? match[1].toLowerCase() : '';\n};\n\nconst domain = extractDomain(customerEmail);\n\n// Pass along the processed data\nreturn {\n  customerEmail,\n  domain,\n  tier,\n  subscriptionId,\n  customerId,\n  amount,\n  eventType,\n  timestamp: new Date().toISOString(),\n  needsCustomerFetch: !customerEmail && customerId\n};"
+      },
+      "id": "extract-stripe-data",
+      "name": "Extract & Process Stripe Data",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        500,
+        300
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.needsCustomerFetch }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check-customer-fetch",
+      "name": "Need Customer Details?",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        700,
+        300
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "resource": "customer",
+        "customerId": "={{ $json.customerId }}"
+      },
+      "id": "fetch-stripe-customer",
+      "name": "Fetch Stripe Customer",
+      "type": "n8n-nodes-base.stripe",
+      "position": [
+        900,
+        200
+      ],
+      "typeVersion": 1,
+      "credentials": {
+        "stripeApi": {
+          "id": "R8YqgUaTaB6frB8p",
+          "name": "Stripe API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge customer data\nconst previousData = $input.all()[0].json;\nconst customerData = $node[\"Fetch Stripe Customer\"].json;\n\nreturn {\n  ...previousData,\n  customerEmail: customerData.email,\n  domain: customerData.email.match(/@([a-zA-Z0-9.-]+\\.[a-zA-Z]{2,})$/)?.[1]?.toLowerCase() || '',\n  customerName: customerData.name || ''\n};"
+      },
+      "id": "merge-customer-data",
+      "name": "Merge Customer Data",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1100,
+        200
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {},
+      "id": "merge-paths",
+      "name": "Merge Paths",
+      "type": "n8n-nodes-base.merge",
+      "position": [
+        1100,
+        400
+      ],
+      "typeVersion": 2.1
+    },
+    {
+      "parameters": {
+        "tableId": "customers"
+      },
+      "id": "create-customer-record",
+      "name": "Create/Update Customer Record",
+      "type": "n8n-nodes-base.supabase",
+      "position": [
+        1300,
+        300
+      ],
+      "typeVersion": 1,
+      "credentials": {
+        "supabaseApi": {
+          "id": "2",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://api.semrush.com/analytics/v1/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "key",
+              "value": "YOUR_SEMRUSH_API_KEY"
+            },
+            {
+              "name": "type",
+              "value": "domain_organic"
+            },
+            {
+              "name": "domain",
+              "value": "={{ $json.domain }}"
+            },
+            {
+              "name": "database",
+              "value": "au"
+            },
+            {
+              "name": "display_limit",
+              "value": "5"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "semrush-domain-overview",
+      "name": "SEMrush Domain Overview",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        1500,
+        300
+      ],
+      "typeVersion": 4.1,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "https://api.semrush.com/analytics/v1/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "key",
+              "value": "YOUR_SEMRUSH_API_KEY"
+            },
+            {
+              "name": "type",
+              "value": "domain_organic_organic"
+            },
+            {
+              "name": "domain",
+              "value": "={{ $json.domain }}"
+            },
+            {
+              "name": "database",
+              "value": "au"
+            },
+            {
+              "name": "display_limit",
+              "value": "5"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "semrush-competitors",
+      "name": "SEMrush Find Competitors",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        1700,
+        300
+      ],
+      "typeVersion": 4.1,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process SEMrush responses\nconst customerData = $node[\"Create/Update Customer Record\"].json;\nconst domainData = $node[\"SEMrush Domain Overview\"].json;\nconst competitorData = $node[\"SEMrush Find Competitors\"].json;\n\n// Extract customer ID from Supabase response\nconst customerId = customerData.id;\n\n// Parse competitor data (SEMrush returns CSV-like format)\nlet competitors = [];\ntry {\n  if (competitorData && typeof competitorData === 'string') {\n    const lines = competitorData.split('\\n').filter(line => line.trim());\n    // Skip header line\n    for (let i = 1; i < Math.min(6, lines.length); i++) {\n      const parts = lines[i].split(';');\n      if (parts[0] && parts[0] !== customerData.domain) {\n        competitors.push({\n          domain: parts[0],\n          overlap_score: parseFloat(parts[1] || 0)\n        });\n      }\n    }\n  }\n} catch (error) {\n  console.error('Error parsing competitors:', error);\n}\n\n// If no competitors found, use default industry competitors\nif (competitors.length === 0) {\n  competitors = [\n    { domain: 'competitor1.com.au', overlap_score: 0.5 },\n    { domain: 'competitor2.com.au', overlap_score: 0.4 },\n    { domain: 'competitor3.com.au', overlap_score: 0.3 }\n  ];\n}\n\nreturn {\n  customerId,\n  customerEmail: customerData.email,\n  customerDomain: customerData.domain,\n  tier: customerData.tier,\n  competitors: competitors.slice(0, 5), // Top 5 competitors\n  timestamp: new Date().toISOString()\n};"
+      },
+      "id": "process-semrush-data",
+      "name": "Process SEMrush Data",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1900,
+        300
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "tableId": "customer_competitors",
+        "dataToSend": "autoMapInputData"
+      },
+      "id": "store-competitors",
+      "name": "Store Competitors",
+      "type": "n8n-nodes-base.supabase",
+      "position": [
+        2100,
+        300
+      ],
+      "executeOnce": false,
+      "typeVersion": 1,
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "2",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "manual_operations_queue"
+      },
+      "id": "schedule-first-report",
+      "name": "Schedule First Report (48h)",
+      "type": "n8n-nodes-base.supabase",
+      "position": [
+        2300,
+        300
+      ],
+      "typeVersion": 1,
+      "credentials": {
+        "supabaseApi": {
+          "id": "2",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send"
+      },
+      "id": "send-welcome-email",
+      "name": "Send Welcome Email",
+      "type": "n8n-nodes-base.sendGrid",
+      "position": [
+        2300,
+        500
+      ],
+      "typeVersion": 1,
+      "credentials": {
+        "sendGridApi": {
+          "id": "3",
+          "name": "SendGrid API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.tier }}",
+              "operation": "notEqual",
+              "value2": "startup"
+            }
+          ]
+        }
+      },
+      "id": "check-dashboard-access",
+      "name": "Growth/Enterprise Tier?",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        2500,
+        300
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "tableId": "dashboard_users"
+      },
+      "id": "create-dashboard-access",
+      "name": "Create Dashboard Access",
+      "type": "n8n-nodes-base.supabase",
+      "position": [
+        2700,
+        200
+      ],
+      "typeVersion": 1,
+      "credentials": {
+        "supabaseApi": {
+          "id": "2",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "workflow_logs"
+      },
+      "id": "log-workflow-success",
+      "name": "Log Workflow Success",
+      "type": "n8n-nodes-base.supabase",
+      "position": [
+        2900,
+        300
+      ],
+      "typeVersion": 1,
+      "credentials": {
+        "supabaseApi": {
+          "id": "2",
+          "name": "Supabase API"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Merge Paths": {
+      "main": [
+        [
+          {
+            "node": "Create/Update Customer Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Competitors": {
+      "main": [
+        [
+          {
+            "node": "Schedule First Report (48h)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Customer Data": {
+      "main": [
+        [
+          {
+            "node": "Merge Paths",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process SEMrush Data": {
+      "main": [
+        [
+          {
+            "node": "Store Competitors",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Welcome Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Stripe Customer": {
+      "main": [
+        [
+          {
+            "node": "Merge Customer Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Need Customer Details?": {
+      "main": [
+        [
+          {
+            "node": "Fetch Stripe Customer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge Paths",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Stripe Payment Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract & Process Stripe Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Dashboard Access": {
+      "main": [
+        [
+          {
+            "node": "Log Workflow Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Growth/Enterprise Tier?": {
+      "main": [
+        [
+          {
+            "node": "Create Dashboard Access",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Workflow Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SEMrush Domain Overview": {
+      "main": [
+        [
+          {
+            "node": "SEMrush Find Competitors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SEMrush Find Competitors": {
+      "main": [
+        [
+          {
+            "node": "Process SEMrush Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule First Report (48h)": {
+      "main": [
+        [
+          {
+            "node": "Growth/Enterprise Tier?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create/Update Customer Record": {
+      "main": [
+        [
+          {
+            "node": "SEMrush Domain Overview",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract & Process Stripe Data": {
+      "main": [
+        [
+          {
+            "node": "Need Customer Details?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "saveExecutionProgress": true,
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "executionTimeout": 3600,
+    "timezone": "UTC"
+  },
+  "versionId": "99a06f30-3a15-4ff6-b66c-048fa0ae9716",
+  "meta": {
+    "instanceId": "2697291d9e6c47bc5e237144fb9526675911e090c8adccc9380f146856863668"
+  },
+  "id": "kWkHRDQQ7Bxn4wo2",
+  "tags": []
+}
