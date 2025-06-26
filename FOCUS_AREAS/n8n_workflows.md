@@ -24,22 +24,50 @@ n8n handles all automation, data processing, and workflow orchestration for the 
 
 ### ⏳ Planned Workflows (From Architecture - 20 Total)
 
-#### High Priority for Distribution (UPDATED 2025-06-26)
-1. **Weekly LinkedIn Report Pre-Generator (#4-Modified)** - Sunday batch for 85 LinkedIn prospects ONLY
-2. **On-Demand Report Generator (#4-New)** - Triggered by email click, generates individual reports
-3. **Report Generation Engine (#6)** - Core report creation logic (uses LangChain nodes, not HTTP)
-   - Must integrate MRC Startup Tier Template from FOCUS_AREAS/MRC_Startup_Tier_Template.md
-   - HTML output format for speed and flexibility
-   - 3 competitor analysis (optimized from 8 for API efficiency)
-4. **LinkedIn Orchestrator (#8)** - 1 account/85 weekly with pre-generated reports
-5. **Email Campaign Manager (#9)** - Generates unique prospect links, no pre-generation
-6. **Report Request Handler (#9-Sub)** - Webhook handler for email clicks → triggers #4-New
+#### High Priority for Distribution (UPDATED 2025-01-30)
+1. **Weekly LinkedIn Report Pre-Generator (#4-Modified)** - Sunday night batch for 85 prospects
+   - Runs every Sunday at 10 PM
+   - Generates all 85 reports in parallel batches
+   - Stores HTML reports in Supabase for week
+   - 6 competitors per report (650 units each)
+
+2. **Email Click Report Generator (#4-New)** - On-demand generation
+   - Webhook triggered by email link clicks
+   - Generates report in 3-5 minutes
+   - Caches for 24 hours to prevent duplicates
+   - Tracks conversion metrics
+
+3. **Report Generation Engine (#6)** - Core HTML report creation
+   - **Inputs**: Customer domain + 6 competitor domains
+   - **Process**: 21 parallel SEMrush API calls (650 units total)
+   - **Template**: Uses MRC_Startup_Tier_Template.md structure
+   - **Output**: HTML report with inline CSS (no PDF)
+   - **Features**: Executive summary, competitive analysis, keyword gaps, ROI projections
+
+4. **LinkedIn Orchestrator (#8)** - Daily distribution
+   - Sends 17 pre-generated reports/day (Mon-Fri)
+   - Pulls from Sunday batch
+   - Tracks opens and engagement
+
+5. **Email Campaign Manager (#9)** - High-volume outreach
+   - Sends 833 emails/day with unique tracking links
+   - No report generation (only on click)
+   - A/B testing capabilities
+
+6. **API Resource Manager (#18)** - Critical for cost control
+   - Tracks 650 units per report
+   - Monthly budget: 528,450 units
+   - Alerts at 80% usage
+   - Rate limiting: 10 requests/second
 
 #### Current Workflow Availability
-- Payment Processing (#1) - ✅ Active
-- Subscription Management (#2) - ⏳ Available in architecture
-- Partner Commission (#3) - ⏳ Available in architecture
-- Report Generation Engine (#6) - 🔄 Needs LangChain node implementation
+- Payment Processing (#1) - ✅ Active (needs delay removal)
+- Subscription Management (#2) - ✅ JSON available
+- Partner Commission (#3) - ✅ JSON available  
+- Report Generation Engine (#6) - 🚨 MUST CREATE - Critical path
+- Email Click Handler (#4-New) - 🚨 MUST CREATE - For conversions
+- LinkedIn Pre-Generator (#4-Mod) - 🚨 MUST CREATE - For efficiency
+- API Resource Manager (#18) - 🚨 MUST CREATE - For cost control
 
 #### Additional Workflows in Architecture
 - Subscription Management (#2)
@@ -60,17 +88,29 @@ n8n handles all automation, data processing, and workflow orchestration for the 
 
 ## Distribution Implementation Details
 
-### Volume Reality (Updated 2025-06-26)
-- **LinkedIn**: 365 pre-generated reports/month (85/week)
-- **Email**: 448 on-demand reports/month (17,920 emails × 2.5% click rate)
+### Volume Reality (Updated 2025-01-30 - FINAL)
+- **LinkedIn**: 365 pre-generated reports/month (85/week × 4.3 weeks)
+- **Email**: 448 on-demand reports/month (17,910 emails × 1.8% click × 20% convert)
 - **Total Reports**: 813 reports/month
-- **SEMrush API Units**: 308,940 units/month (380 units per report)
-- **API Cost**: ~$15.45/month additional (beyond included 10,000 units)
+- **Competitors per report**: 6 (optimized from 8)
+- **SEMrush API Units**: 528,450 units/month (650 units per report)
+- **API Cost**: ~$26.42/month additional (beyond included 10,000 units)
+- **Total SEMrush Cost**: $476.42/month ($450 plan + $26.42 overage)
+- **Cost per report**: $0.0325 (3.25 cents)
 
-### Report Generation Strategy
-- **LinkedIn**: Pre-generate all 85 reports Sunday night for the week
-- **Email**: Generate on-demand when link clicked (3-5 min process)
-- **Paid customers**: Generate immediately upon payment (not 48 hours)
+### Report Generation Strategy (FINAL)
+- **LinkedIn**: Pre-generate all 85 reports Sunday night 10 PM
+  - Batch process for efficiency
+  - Store in Supabase with 7-day TTL
+  - Include all 6 competitors per industry
+- **Email**: Generate on-demand when link clicked
+  - 3-5 minute generation time
+  - Cache for 24 hours
+  - Track conversion funnel
+- **Paid customers**: Generate immediately upon payment
+  - Remove ALL delays
+  - Deliver within 5 minutes
+  - Include onboarding sequence
 
 ### Key Architecture Documents
 - **Full 20-Workflow Architecture**: `C:\Users\dvids\MRC\MRC N8N Workflow Architecture.md`
@@ -178,10 +218,113 @@ try {
 
 ---
 
+## Detailed Workflow Architectures (2025-01-30)
+
+### Report Generation Engine (#6) - CRITICAL PATH
+```
+[Input: Customer + 6 Competitors]
+    ↓
+[Parallel API Branch]
+├── Customer Analysis (20 units)
+│   ├── Domain Organic
+│   └── Domain Adwords
+├── Competitor Analysis (120 units) 
+│   ├── 6x Domain Organic
+│   └── 6x Domain Adwords
+├── Keyword Analysis (30 units)
+│   ├── Top 10 keywords
+│   └── Gap analysis
+├── Backlinks (350 units)
+│   ├── Customer backlinks
+│   └── 6x Competitor backlinks
+└── Ad Copy (60 units)
+    └── 6x Competitor ads
+    ↓
+[Merge Results] - 650 units total
+    ↓
+[Claude LangChain Node]
+├── Template: MRC_Startup_Tier_Template.md
+├── Model: Claude 3 Opus
+└── Output: HTML with inline CSS
+    ↓
+[Store in Supabase]
+└── [Return HTML Report]
+```
+
+### Email Click Handler Workflow
+```
+[Webhook: /report/{encoded_params}]
+    ↓
+[Decode Parameters]
+├── Prospect domain
+├── Industry
+└── Tracking ID
+    ↓
+[Check Cache]
+├── If exists → Return cached
+└── If not → Continue
+    ↓
+[Get Industry Competitors]
+└── Top 6 for their industry
+    ↓
+[Call Report Generation Engine]
+    ↓
+[Track Event]
+├── Log click in Supabase
+├── Start conversion timer
+└── Send to analytics
+    ↓
+[Return HTML Report]
+```
+
+### Sunday LinkedIn Pre-Generator
+```
+[Cron: Sunday 10 PM]
+    ↓
+[Get Week's Prospects]
+└── 85 LinkedIn connections
+    ↓
+[Batch Process - 5 parallel]
+├── Batch 1: Reports 1-17
+├── Batch 2: Reports 18-34
+├── Batch 3: Reports 35-51
+├── Batch 4: Reports 52-68
+└── Batch 5: Reports 69-85
+    ↓
+[For Each Prospect]
+├── Get industry
+├── Get 6 competitors
+├── Generate HTML report
+└── Store with metadata
+    ↓
+[Schedule Distribution]
+└── 17/day Mon-Fri
+```
+
+## Critical Implementation Notes
+
+### API Efficiency
+- **Parallel calls**: Maximum 10 requests/second
+- **Batch size**: 5 reports concurrently for pre-generation
+- **Caching**: 24-hour cache for email, 7-day for LinkedIn
+- **Error handling**: Retry 3x with exponential backoff
+
+### Report Storage
+- **Format**: HTML with inline CSS (no external dependencies)
+- **Size**: ~150-200KB per report
+- **Storage**: Supabase JSONB field or S3 with CDN
+- **Indexing**: By domain, industry, generation date
+
+### Cost Tracking
+- **Per report**: Log 650 units used
+- **Monthly dashboard**: Track against 528,450 budget
+- **Alerts**: 80%, 90%, 95% usage warnings
+- **Overage handling**: Automatic purchase of additional units
+
 ## Next Session Focus
 When working on n8n workflows:
-1. Check [[MISTAKES_AND_FIXES/n8n_errors]] for known issues
-2. Remember LinkedIn is 85/week not 85/day
-3. Payment → Report must be immediate
-4. Most workflows already defined in architecture
-5. Focus on adjusting volumes, not creating new workflows
+1. Create Report Generation Engine (#6) FIRST - it's the core
+2. Remove 48-hour delay from Payment Processing (#1)
+3. Build Email Click Handler for conversions
+4. Setup Sunday LinkedIn Pre-Generator
+5. All workflows must handle 6 competitors and output HTML
