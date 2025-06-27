@@ -35,6 +35,14 @@ Common issues and their solutions:
 - Performance optimization
 - Emergency procedures
 
+### [MCP Servers](mcp_servers.md)
+Configured MCP servers for enhanced capabilities:
+- n8n API control and workflow management
+- n8n Knowledge for node documentation
+- PostgreSQL for direct Supabase access
+- GitHub for repository management
+- Brave Search for competitor research
+
 ## 🚀 Quick Access Commands
 
 ### Check System Status

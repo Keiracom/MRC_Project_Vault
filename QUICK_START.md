@@ -33,8 +33,17 @@ Multi-platform competitive intelligence service with automated reporting, dashbo
 - **API Costs**: $0.00005/unit = $0.0325 per report (650 units × 6 competitors)
 - **Report Format**: HTML with PDF download option (not PDF primary)
 
+### 🎯 Latest Implementation Decisions (2025-06-27)
+- **UUID Approach**: Each prospect gets one permanent report_uuid for all channels
+- **Sunday Batch Processing**: All 5,000 messages + 85 reports generated Sunday night
+- **Quality Control**: Every message and report QC'd before sending
+- **Email Click Flow**: 4-6 min total (including real-time QC)
+- **Details**: [[PROJECT_CORE/implementation_decisions|Implementation Decisions]] | [[FOCUS_AREAS/qc_implementation|QC Guide]]
+
 ### Completed This Session
 - ✅ SEMrush API cost analysis corrected (4,000x error found) - 2025-01-30
+- ✅ Complete QC framework designed for messages and reports - 2025-06-27
+- ✅ UUID-based prospect tracking system implemented - 2025-06-27
 - ✅ Final decision: 6 competitors optimal (650 units, $0.0325/report) - 2025-01-30
 - ✅ HTML report format chosen over PDF for speed/flexibility - 2025-01-30
 - ✅ Report Generation Engine (#6) requirements defined - 2025-01-30

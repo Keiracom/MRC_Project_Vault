@@ -1,5 +1,13 @@
 # Save Router - Information Dispatch System
 
+## 📍 Latest Critical Paths (2025-06-27)
+
+### Implementation Documentation
+- **UUID Tracking System** → `DATABASE/enhanced_schema.sql`
+- **QC Framework** → `FOCUS_AREAS/qc_implementation.md`
+- **All Decisions** → `PROJECT_CORE/implementation_decisions.md`
+- **Sunday Timeline** → `QUICK_REFERENCE/sunday_batch_workflow.md`
+
 ## 🎯 How to Use This Router
 When you need to save something, tell Claude:
 "Use SAVE_ROUTER.md to determine where to save [type of information]"

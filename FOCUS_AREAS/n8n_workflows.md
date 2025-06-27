@@ -68,6 +68,9 @@ n8n handles all automation, data processing, and workflow orchestration for the 
 - Email Click Handler (#4-New) - 🚨 MUST CREATE - For conversions
 - LinkedIn Pre-Generator (#4-Mod) - 🚨 MUST CREATE - For efficiency
 - API Resource Manager (#18) - 🚨 MUST CREATE - For cost control
+- Sunday Message QC (#21) - 🚨 MUST CREATE - Quality control for 5,000 messages
+- Sunday Report QC (#22) - 🚨 MUST CREATE - Quality control for 85 reports
+- Real-time Email QC (#23) - 🚨 MUST CREATE - QC for on-demand reports
 
 #### Additional Workflows in Architecture
 - Subscription Management (#2)
@@ -547,6 +550,39 @@ const rateLimits = {
   }
 };
 ```
+
+## Quality Control Workflows (NEW - Critical for Quality)
+
+### 21. Sunday Message QC Workflow
+- **Purpose**: Review and fix all 5,000 generated messages before sending
+- **Trigger**: Runs Sunday 2 AM after message generation
+- **Process**:
+  1. Query prospects WHERE message_qc_status = 'pending'
+  2. Send each message to Claude for review
+  3. Check for: placeholders, grammar, personalization accuracy
+  4. Update final_message and qc_status
+  5. Set ready_to_send = TRUE when passed
+- **Performance**: Process in batches of 100, ~2 hours total
+
+### 22. Sunday Report QC Workflow  
+- **Purpose**: Quality check all 85 pre-generated LinkedIn reports
+- **Trigger**: Runs Sunday 3 AM after report generation
+- **Process**:
+  1. Query generated_reports WHERE qc_status = 'pending'
+  2. Validate data accuracy, formatting, calculations
+  3. Check for missing sections or broken elements
+  4. Update final_html_content and ready_for_delivery
+- **Critical Checks**: Competitor data, ROI calculations, CTA links
+
+### 23. Real-time Email Report QC
+- **Purpose**: QC reports generated from email clicks before delivery
+- **Trigger**: After report generation, before email send
+- **Process**:
+  1. Quick validation (30-60 seconds)
+  2. Check critical errors only
+  3. If blocked, send apology email and queue for manual review
+  4. Log all QC results for analysis
+- **SLA**: Must complete within 60 seconds
 
 ## Free Report Distribution Implementation
 
